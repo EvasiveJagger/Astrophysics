@@ -1,203 +1,112 @@
-# import pandas as pd
-# import numpy as np
-# from datetime import datetime, timedelta
-# import math
-#
-# def generate_ra_columns(file, digits,asc):
-#     cols = []
-#     #range(len(file['RAFix']))
-#     for x in range(10):
-#         RA = round(file['True RA'][x],digits)
-#         if RA not in cols:
-#             if len(cols)==0:
-#                 cols.append(RA)
-#             else:
-#                 if asc:
-#                     z = 0
-#                     while z<len(cols):
-#                         if RA==cols[z]:
-#                             break
-#                         if RA>cols[z]:
-#                             z+=1
-#                             if z==len(cols):
-#                                 cols.append(RA)
-#                         elif RA<cols[z]:
-#                             cols.insert(z, RA)
-#                             break
-#                 else:
-#                     z = 0
-#                     while z < len(cols):
-#                         if RA == cols[z]:
-#                             break
-#                         if RA > cols[z]:
-#                             cols.insert(z, RA)
-#                             break
-#                         elif RA < cols[z]:
-#                             z += 1
-#                             if z == len(cols):
-#                                 cols.append(RA)
-#         #print("list: "+str(cols))
-#     return cols
-#
-# def generate_dec_rows(file,digits, asc):
-#     rows = []
-#     # range(len(file['RAFix']))
-#     for x in range(10):
-#         Dec = round(file['True DEC'][x], digits)
-#         if Dec not in rows:
-#             if len(rows) == 0:
-#                 rows.append(Dec)
-#             else:
-#                 if asc:
-#                     z = 0
-#                     while z < len(rows):
-#                         if Dec == rows[z]:
-#                             break
-#                         if Dec > rows[z]:
-#                             z += 1
-#                             if z == len(rows):
-#                                 rows.append(Dec)
-#                         elif Dec < rows[z]:
-#                             rows.insert(z, Dec)
-#                             break
-#                 else:
-#                     z = 0
-#                     while z < len(rows):
-#                         if Dec == rows[z]:
-#                             break
-#                         if Dec > rows[z]:
-#                             rows.insert(z, Dec)
-#                             break
-#                         elif Dec < rows[z]:
-#                             z += 1
-#                             if z == len(rows):
-#                                 rows.append(Dec)
-#         # print("list: "+str(cols))
-#     return rows
-# def generatetable(columns,rows,file,digits):
-#     datatable = np.zeros((len(columns),len(rows)));
-#
-#     for x in range(10):
-#         power = file["Power (dBFS)"][x]
-#         ra = round(file["True RA"][x],digits)
-#         dec = round(file["True DEC"][x],digits)
-#         if ra in columns and dec in rows:
-#             if datatable[columns.index(ra),rows.index(dec)]==0:
-#                 datatable[columns.index(ra), rows.index(dec)] = power;
-#             else:
-#                 datatable[columns.index(ra), rows.index(dec)] = (datatable[columns.index(ra), rows.index(dec)]+power)/2
-#     return datatable
-# def generatedataframe(table,columns,rows):
-#     output = pd.DataFrame(
-#         {
-#             "Dec": [rows]
-#         }
-#     )
-#     for x in range(len(columns)):
-#         output[columns[x]] = table[x].tolist()
-#     return output
-
-
-#
-# df = pd.read_csv("cleanedspagdata.csv")
-# co = generate_ra_columns(df,5,True)
-# ro = generate_dec_rows(df,5,False)
-# table = generatetable(co,ro,df,5)
-# out = generatedataframe(table,co,ro)
-# out.to_csv("output")
-
-
 import math
 import os
 import sys
-
+import astropy
 import numpy as np
 import pandas as pd
+name=""
+radigits = 6
+decdigits = 6
+#Gas mask RA: 3.98, 4.13 DEC: 35.7,36.7
+# name="spag"
+# df = pd.read_csv("cleanedspagdata.csv")
+# minRA = 5.466 #spaghetti
+# maxRA = 5.866
+# minDEC = 25
+# maxDEC = 31
 
-radigits = 4
-decdigits = 3
+name="krabby"
+df = pd.read_csv("krabby.csv")
+minRA = 5.1313#spaghetti
+maxRA = 5.777
+minDEC = 19.40
+maxDEC = 24.94
+#name="spacesquir"
+# df = pd.read_csv("spaces.csv")
+# minRA = 0.58333 #spaceballs
+# maxRA = 1.404882
+# minDEC = 54.20389
+# maxDEC = 64.120498
 
-beamwidthRA = 0.028
-beamwidthDEC = 0.42
+#name="RRW"
+#df = pd.read_csv("RRW.csv")
+# minRA = 0.606061 #rrw
+# maxRA = 1.378788
+# minDEC = 54.69697
+# maxDEC = 63.484848
+
+# name="gasmask"
+# df = pd.read_csv("gasmask.csv")
+# minRA = 3.869 #Gas mask
+# maxRA = 4.21
+# minDEC = 35.458
+# maxDEC = 36.8823
+
+resRA = 100
+resDEC = 100
+
+beamwidthRA = 0.028   # hours (full width)
+beamwidthDEC = 0.42   # degrees (full width)
+
 # Read the data
-df = pd.read_csv("cleanedspagdata.csv")
 
-# Round coordinates
-df["RA"] = df["True RA"].round(radigits)
-df["Dec"] = df["True DEC"].round(decdigits)
-ra_min = 5.4
-dec_min = -20
 
-# df = df[
-#     df["True RA"].between(3.98,4.13) &
-#     df["True DEC"].between(35.7,36.7)
-# ] # gas mask bounds
+
+
 df = df[
-    df["True RA"].between(5.4,5.8) &
-    df["True DEC"].between(25.7,30.2)
-] #spag bounds
-# Create table
-table = df.pivot_table(
-    index="Dec",
-    columns="RA",
-    values="Power (dBFS)",
-    aggfunc="mean",     # average duplicates
-    fill_value=0        # empty cells become 0
-)
-
-# Optional sorting
-table = table.sort_index(ascending=False)          # Dec descending
-table = table.reindex(sorted(table.columns), axis=1)  # RA ascending
-
-# for dec, row in table.iterrows():
-#     for ra, power in row.items():
-#         if power == 0:
-#             continue
-#         new_df = df[
-#             df["True RA"].between(ra-beamwidthRA, ra+beamwidthRA) &
-#             df["True DEC"].between(dec-beamwidthDEC, dec+beamwidthDEC)
-#         ]
-
-table.to_csv("beam.csv")
-
-beam_radius = 0.42 / 2   # degrees
-
-# Fresh accumulators for the beam convolution.
-# IMPORTANT: these must start at zero, not reuse the pivoted `table` values above
-# (that table already contains raw per-sample averages, and adding beam
-# contributions on top of it double-counted every cell that happened to sit
-# on an actual sample point -- which is dense right along the scan path.
-# That was the source of the bright streak tracking the middle of the scan).
-grid_dec = table.index.to_numpy(dtype=float)      # (R,)
-grid_ra = table.columns.to_numpy(dtype=float)     # (C,)
+    df["True RA"].between(minRA, maxRA) &
+    df["True DEC"].between(minDEC, maxDEC)
+]  # spag bounds
 
 source_ra = df["True RA"].to_numpy(dtype=float)     # (N,) hours
 source_dec = df["True DEC"].to_numpy(dtype=float)   # (N,) degrees
 power = df["Power (dBFS)"].to_numpy(dtype=float)    # (N,)
 
+# Evenly spaced grid axes, built purely from bounds + resolution
+grid_ra = np.linspace(maxRA, minRA, resRA)                    # now descending
+grid_dec = np.linspace(maxDEC, minDEC, resDEC)
+
+ra_half = beamwidthRA / 2    # hours
+dec_half = beamwidthDEC / 2  # degrees
+
 print("calculating beam")
-
 power_sum = np.zeros((len(grid_dec), len(grid_ra)))
-hit_count = np.zeros((len(grid_dec), len(grid_ra)))
+weight_sum = np.zeros((len(grid_dec), len(grid_ra)))
+z=0
+# Small floor to avoid divide-by-zero when a source sits exactly on a grid point
+epsilon = 1e-6
 
-# Vectorized beam convolution: broadcast every grid cell against every
-# source sample at once instead of a Python triple-nested loop.
 for i in range(len(grid_dec)):
-    delta_dec = grid_dec[i] - source_dec                      # (N,)
-    delta_ra = (grid_ra[:, None] - source_ra[None, :]) * 15    # (C, N)
-    distance = np.sqrt((delta_ra * np.cos(np.radians(source_dec))[None, :]) ** 2 + delta_dec[None, :] ** 2)
+    z += 1
+    print(str(z) + "/" + str(len(grid_dec)))
+    delta_dec = grid_dec[i] - source_dec                        # (N,) degrees
+    delta_ra = grid_ra[:, None] - source_ra[None, :]             # (C, N) hours
 
-    within_beam = distance <= beam_radius                      # (C, N)
-    power_sum[i] = within_beam @ power
-    hit_count[i] = within_beam.sum(axis=1)
+    # Elliptical normalized distance (1.0 = at the beam edge)
+    norm_dist = np.sqrt(
+        (delta_ra / ra_half) ** 2
+        + (delta_dec[None, :] / dec_half) ** 2
+    )
+
+    within_beam = norm_dist <= 1.0                               # (C, N)
+
+    # Inverse-square weighting by normalized distance from beam center
+    weight = 1.0 / (norm_dist ** 2 + epsilon)
+    weight = np.where(within_beam, weight, 0.0)                  # zero out points outside beam
+
+    power_sum[i] = (weight * power[None, :]).sum(axis=1)
+    weight_sum[i] = weight.sum(axis=1)
 
 with np.errstate(invalid="ignore"):
-    beam_values = power_sum / hit_count
+    beam_values = power_sum / weight_sum
 
-table = pd.DataFrame(beam_values, index=table.index, columns=table.columns)
+table = pd.DataFrame(
+    beam_values,
+    index=np.round(grid_dec, decdigits),
+    columns=np.round(grid_ra, radigits),
+)
 
-# Empty cells = 0
-table = table.fillna(0)
 
 # Save
-table.to_csv("spaoutputbeam"+str(radigits)+"x"+str(decdigits)+".csv")
+table.to_csv("v2"+ name + str(resRA) + "x" + str(resDEC) + ".csv")
+
