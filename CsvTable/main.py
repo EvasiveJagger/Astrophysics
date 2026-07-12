@@ -111,6 +111,7 @@ import math
 import os
 import sys
 
+import numpy as np
 import pandas as pd
 
 radigits = 4
@@ -161,42 +162,39 @@ table.to_csv("beam.csv")
 
 beam_radius = 0.42 / 2   # degrees
 
+# Fresh accumulators for the beam convolution.
+# IMPORTANT: these must start at zero, not reuse the pivoted `table` values above
+# (that table already contains raw per-sample averages, and adding beam
+# contributions on top of it double-counted every cell that happened to sit
+# on an actual sample point -- which is dense right along the scan path.
+# That was the source of the bright streak tracking the middle of the scan).
+grid_dec = table.index.to_numpy(dtype=float)      # (R,)
+grid_ra = table.columns.to_numpy(dtype=float)     # (C,)
 
-# Create empty telescope map
+source_ra = df["True RA"].to_numpy(dtype=float)     # (N,) hours
+source_dec = df["True DEC"].to_numpy(dtype=float)   # (N,) degrees
+power = df["Power (dBFS)"].to_numpy(dtype=float)    # (N,)
 
-# Count hits for averaging
-hits = pd.DataFrame(
-    0,
-    index=table.index,
-    columns=table.columns
-)
-num=0
 print("calculating beam")
-for _, source in df.iterrows():
-    num+=1
-    print(str(num)+"/"+str(len(df)))
-    source_ra = source["True RA"]       # hours
-    source_dec = source["True DEC"]     # degrees
-    power = source["Power (dBFS)"]
 
+power_sum = np.zeros((len(grid_dec), len(grid_ra)))
+hit_count = np.zeros((len(grid_dec), len(grid_ra)))
 
-    for dec in table.index:
-        for ra in table.columns:
+# Vectorized beam convolution: broadcast every grid cell against every
+# source sample at once instead of a Python triple-nested loop.
+for i in range(len(grid_dec)):
+    delta_dec = grid_dec[i] - source_dec                      # (N,)
+    delta_ra = (grid_ra[:, None] - source_ra[None, :]) * 15    # (C, N)
+    distance = np.sqrt((delta_ra * np.cos(np.radians(source_dec))[None, :]) ** 2 + delta_dec[None, :] ** 2)
 
-            delta_ra = (ra - source_ra) * 15
-            delta_dec = dec - source_dec
+    within_beam = distance <= beam_radius                      # (C, N)
+    power_sum[i] = within_beam @ power
+    hit_count[i] = within_beam.sum(axis=1)
 
-            distance = math.sqrt((delta_ra * math.cos(math.radians(source_dec)))**2+delta_dec**2)
+with np.errstate(invalid="ignore"):
+    beam_values = power_sum / hit_count
 
-            if distance <= beam_radius:
-
-                table.loc[dec, ra] += power
-                hits.loc[dec, ra] += 1
-
-
-
-# Average overlapping beams
-table = table / hits.replace(0, math.nan)
+table = pd.DataFrame(beam_values, index=table.index, columns=table.columns)
 
 # Empty cells = 0
 table = table.fillna(0)
