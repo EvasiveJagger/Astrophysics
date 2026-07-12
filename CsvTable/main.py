@@ -113,7 +113,7 @@ import sys
 
 import pandas as pd
 
-radigits = 3
+radigits = 4
 decdigits = 3
 
 beamwidthRA = 0.028
